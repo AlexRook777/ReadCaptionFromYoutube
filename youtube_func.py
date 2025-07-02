@@ -5,22 +5,42 @@ from googleapiclient.errors import HttpError
 import json
 from pathlib import Path
 import re
-from pytube import YouTube
 
-def get_youtube_video_title(video_url: str) -> str | None:
+
+def get_youtube_video_title(video_url: str, api_key: str) -> str | None:
     """
-    Отримує назву YouTube відео за його URL за допомогою Pytube.
+    Отримує назву YouTube відео за його URL за допомогою Google API.
 
     Аргументи:
         video_url (str): URL YouTube відео.
+        api_key (str): Ваш API-ключ YouTube Data API.
 
     Повертає:
         str: Назва відео, або None у разі помилки.
     """
     try:
-        yt = YouTube(video_url)
-        #return clean_string_keep_cyrillic_alphanumeric_and_space(yt.title)
-        return yt.title
+        # Витягуємо video_id з URL
+        video_id = None
+        if 'v=' in video_url:
+            video_id = video_url.split('v=')[-1].split('&')[0]
+        elif 'youtu.be/' in video_url:
+            video_id = video_url.split('youtu.be/')[-1].split('?')[0]
+        if not video_id:
+            print(f"Error: Impossible to get video ID from URL: {video_url}")
+            return None
+
+        youtube = build('youtube', 'v3', developerKey=api_key)
+        request = youtube.videos().list(
+            part="snippet",
+            id=video_id
+        )
+        response = request.execute()
+        items = response.get("items")
+        if items and len(items) > 0:
+            return items[0]["snippet"]["title"]
+        else:
+            print(f"Error: No video found for ID {video_id}")
+            return None
     except Exception as e:
         print(f"Помилка при отриманні назви відео: {e}")
         return None
@@ -36,7 +56,7 @@ def save_youtube_captions_to_file(list_of_playlists_to_save=[]):
     if list_of_playlists_to_save:
         print("Info: Saving subtitles to file") 
         try:
-            file_path = Path('youtube_subtitles.json')
+            file_path = Path('youtube_subtitles.txt')
             with file_path.open('w', encoding='utf-8') as f:
                 json.dump(list_of_playlists_to_save, f, indent=4, ensure_ascii=False)
         except Exception as e:
@@ -333,7 +353,7 @@ def get_captions(video_url_list:list):
             caption_text = get_youtube_captions_from_one_video(video_url)
             caption_text = caption_text if caption_text else ""
             if caption_text:
-                video_title = get_youtube_video_title(video_url)
+                video_title = get_youtube_video_title(video_url, api_key)
                 video_title = video_title if video_title else "No title"
                 video = {'title': video_title, 'url': video_url, 'captions': caption_text}
                 list_of_playlist_to_save.append(video)
@@ -345,7 +365,7 @@ def get_captions(video_url_list:list):
 
     return 
 
-api_key='AIzaSyBWgU_1YFk9DzLLk0A_ooV_YFRjutGbCXk'
+#api_key='AIzaSyBWgU_1YFk9DzLLk0A_ooV_YFRjutGbCXk'
 
 if __name__ == "__main__":
     # Example usage 1
